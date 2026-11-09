@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Doraemon · GLB preview</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #eaf1f7; }
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; width: 100% !important; height: 100% !important; }
+  .hud {
+    position: fixed; left: 18px; bottom: 16px;
+    font: 500 12px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    color: #5b7385; letter-spacing: .02em; user-select: none;
+  }
+  .hud b { color: #2b4658; font-weight: 700; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "../node_modules/three/build/three.module.js",
+    "three/addons/": "../node_modules/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div class="hud"><b>Doraemon</b> · drag to orbit</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#eef4f9');
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+const target = new THREE.Vector3(0, 0.92, 0);
+camera.position.set(0, 1.05, 4.6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.6;
+controls.maxDistance = 9;
+controls.update();
+
+const key = new THREE.DirectionalLight('#ffffff', 2.1);
+key.position.set(2.4, 3.6, 3.2);
+scene.add(key);
+const fill = new THREE.DirectionalLight('#cfe6ff', 0.85);
+fill.position.set(-3.0, 1.4, 1.6);
+scene.add(fill);
+const rim = new THREE.DirectionalLight('#ffffff', 1.1);
+rim.position.set(-1.2, 2.6, -3.4);
+scene.add(rim);
+scene.add(new THREE.HemisphereLight('#ffffff', '#c8d6e2', 0.55));
+
+let model = null;
+const loader = new GLTFLoader();
+loader.load('../doraemon.glb', (gltf) => {
+  model = gltf.scene;
+  model.traverse((o) => {
+    if (o.isMesh) {
+      o.material.envMapIntensity = 0.85;
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  scene.add(model);
+  window.__ready = true;
+  const box = new THREE.Box3().setFromObject(model);
+  console.log('bounds', box.min.toArray(), box.max.toArray());
+}, undefined, (err) => {
+  console.error('load failed', err);
+  window.__error = String(err);
+});
+
+function fit() {
+  const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+// orbit helper for scripted views: setView(azimuthDeg, elevationDeg, distance)
+window.setView = (az = 0, el = 0, dist = 4.6, ty = 0.92) => {
+  fit();
+  const a = THREE.MathUtils.degToRad(az);
+  const e = THREE.MathUtils.degToRad(el);
+  target.set(0, ty, 0);
+  camera.position.set(
+    Math.sin(a) * Math.cos(e) * dist,
+    ty + Math.sin(e) * dist,
+    Math.cos(a) * Math.cos(e) * dist
+  );
+  controls.target.copy(target);
+  camera.lookAt(target);
+  controls.update();
+};
+
+addEventListener('resize', fit);
+fit();
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
